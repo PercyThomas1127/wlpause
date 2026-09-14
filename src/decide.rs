@@ -21,8 +21,7 @@ impl OutputState {
     /// Fraction of the wallpaper hidden, or `None` when there is no wallpaper
     /// on this output at all.
     pub fn covered(&self) -> Option<f64> {
-        self.wallpaper
-            .map(|w| covered_fraction(w, &self.occluders))
+        self.wallpaper.map(|w| covered_fraction(w, &self.occluders))
     }
 
     pub fn decision(&self, threshold: f64) -> Decision {
@@ -83,7 +82,12 @@ mod tests {
         }
     }
 
-    const BAR: Rect = Rect { x: 0, y: 0, w: 1600, h: 60 };
+    const BAR: Rect = Rect {
+        x: 0,
+        y: 0,
+        w: 1600,
+        h: 60,
+    };
 
     #[test]
     fn bare_desktop_plays() {
@@ -93,7 +97,10 @@ mod tests {
     #[test]
     fn fully_tiled_pauses() {
         let win = Rect::new(0, 60, 1600, 940);
-        assert_eq!(out("a", true, vec![BAR, win]).decision(0.90), Decision::Pause);
+        assert_eq!(
+            out("a", true, vec![BAR, win]).decision(0.90),
+            Decision::Pause
+        );
     }
 
     /// Screen off beats geometry: even a completely bare desktop must pause.

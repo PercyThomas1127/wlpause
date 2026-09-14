@@ -1,9 +1,9 @@
 //! wlpause -- pause a video wallpaper while it is covered.
 
 use std::io;
+use std::os::fd::RawFd;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use std::os::fd::RawFd;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::Duration;
 
@@ -47,9 +47,17 @@ fn wait(comp: &mut dyn Compositor, sig_r: RawFd, timeout: Duration) -> io::Resul
     let ev = comp.event_fd();
     let mut fds: Vec<libc::pollfd> = Vec::with_capacity(2);
     if let Some(fd) = ev {
-        fds.push(libc::pollfd { fd, events: libc::POLLIN, revents: 0 });
+        fds.push(libc::pollfd {
+            fd,
+            events: libc::POLLIN,
+            revents: 0,
+        });
     }
-    fds.push(libc::pollfd { fd: sig_r, events: libc::POLLIN, revents: 0 });
+    fds.push(libc::pollfd {
+        fd: sig_r,
+        events: libc::POLLIN,
+        revents: 0,
+    });
 
     let ms = timeout.as_millis().min(i32::MAX as u128) as libc::c_int;
     // SAFETY: fds is a valid, correctly-sized array of pollfd for its length.
@@ -153,8 +161,7 @@ fn parse_args() -> Result<Option<Opts>, String> {
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         let mut val = |name: &str| -> Result<String, String> {
-            args.next()
-                .ok_or_else(|| format!("{name} needs a value"))
+            args.next().ok_or_else(|| format!("{name} needs a value"))
         };
         match a.as_str() {
             "-h" | "--help" => {
@@ -226,10 +233,7 @@ fn parse_args() -> Result<Option<Opts>, String> {
 /// wlpause is normally launched from the same autostart block as the
 /// wallpaper, a fraction of a second behind it, so "not there yet" is the
 /// expected case rather than an error.
-fn resolve_socket(
-    comp: &mut dyn Compositor,
-    opts: &Opts,
-) -> Result<PathBuf, String> {
+fn resolve_socket(comp: &mut dyn Compositor, opts: &Opts) -> Result<PathBuf, String> {
     if let Some(p) = &opts.mpv_socket {
         let deadline = std::time::Instant::now() + opts.wait;
         while !p.exists() {
@@ -314,16 +318,11 @@ fn reconcile(
         eprintln!("  -> {want:?}");
     }
 
-    let actual = target.is_paused()?;
-    if actual == want.is_paused() {
-        return Ok(());
-    }
     if opts.dry_run {
         eprintln!("[dry-run] would {} the wallpaper", infinitive(want));
         return Ok(());
     }
-    target.set_paused(want.is_paused())?;
-    if opts.verbose {
+    if target.sync(want.is_paused())? && opts.verbose {
         eprintln!("  {} the wallpaper", verb(want));
     }
     Ok(())
@@ -357,7 +356,8 @@ fn run() -> Result<(), String> {
         libc::signal(libc::SIGPIPE, libc::SIG_IGN);
     }
 
-    let mut comp = compositor::detect(&opts.namespace, opts.alpha_min).map_err(|e| e.to_string())?;
+    let mut comp =
+        compositor::detect(&opts.namespace, opts.alpha_min).map_err(|e| e.to_string())?;
     let sock = resolve_socket(comp.as_mut(), &opts)?;
     let mpv = MpvIpc::new(&sock);
     let mut target: Box<dyn Target> = if opts.freeze {
@@ -377,7 +377,11 @@ fn run() -> Result<(), String> {
         eprintln!(
             "wlpause: {} ({}), {}, threshold {:.0}%",
             comp.name(),
-            if comp.event_driven() { "event-driven" } else { "polling" },
+            if comp.event_driven() {
+                "event-driven"
+            } else {
+                "polling"
+            },
             target.describe(),
             opts.threshold * 100.0
         );
@@ -426,7 +430,7 @@ fn run() -> Result<(), String> {
 
     // Never leave a frozen wallpaper behind on the way out.
     if opts.resume_on_exit && !opts.dry_run {
-        if let Err(e) = target.set_paused(false) {
+        if let Err(e) = target.sync(false) {
             eprintln!("wlpause: could not resume on exit: {e}");
         } else if opts.verbose {
             eprintln!("wlpause: resumed wallpaper on exit");

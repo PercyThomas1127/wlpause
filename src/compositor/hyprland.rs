@@ -92,7 +92,6 @@ impl Hyprland {
             )
         })
     }
-
 }
 
 fn layer_rect(l: &Value) -> Rect {
@@ -171,10 +170,8 @@ impl Compositor for Hyprland {
                         if l.get("namespace").and_then(Value::as_str) == Some(&self.wallpaper_ns) {
                             wallpaper = Some(layer_rect(l));
                             wallpaper_level = lvl;
-                            wallpaper_addr = l
-                                .get("address")
-                                .and_then(Value::as_str)
-                                .map(str::to_string);
+                            wallpaper_addr =
+                                l.get("address").and_then(Value::as_str).map(str::to_string);
                             break 'outer;
                         }
                     }
@@ -307,5 +304,5 @@ pub fn ipc_socket_of(pid: u32) -> Option<PathBuf> {
     text.split(['\0', ' '])
         .find_map(|a| a.trim_start_matches("--").strip_prefix("input-ipc-server="))
         .map(PathBuf::from)
-        .filter(|p: &PathBuf| p.as_os_str().len() > 0 && Path::new(p).exists())
+        .filter(|p: &PathBuf| !p.as_os_str().is_empty() && Path::new(p).exists())
 }

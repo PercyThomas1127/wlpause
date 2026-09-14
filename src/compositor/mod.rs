@@ -50,7 +50,10 @@ pub trait Compositor {
 /// Pick a backend from the environment.
 pub fn detect(wallpaper_ns: &str, alpha_min: f64) -> io::Result<Box<dyn Compositor>> {
     if hyprland::available() {
-        return Ok(Box::new(hyprland::Hyprland::connect(wallpaper_ns, alpha_min)?));
+        return Ok(Box::new(hyprland::Hyprland::connect(
+            wallpaper_ns,
+            alpha_min,
+        )?));
     }
     Err(io::Error::new(
         io::ErrorKind::NotFound,

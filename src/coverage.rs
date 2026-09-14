@@ -81,7 +81,12 @@ pub fn subtract(base: Rect, cut: Rect) -> Vec<Rect> {
     }
     // Full-width band below the cut.
     if c.bottom() < base.bottom() {
-        out.push(Rect::new(base.x, c.bottom(), base.w, base.bottom() - c.bottom()));
+        out.push(Rect::new(
+            base.x,
+            c.bottom(),
+            base.w,
+            base.bottom() - c.bottom(),
+        ));
     }
     // Left and right slivers, limited to the cut's vertical span so they do
     // not overlap the bands above.
@@ -145,9 +150,19 @@ mod tests {
     use super::*;
 
     /// The logical size of the machine this was written on: 2560x1600 @ 1.6.
-    const OUT: Rect = Rect { x: 0, y: 0, w: 1600, h: 1000 };
+    const OUT: Rect = Rect {
+        x: 0,
+        y: 0,
+        w: 1600,
+        h: 1000,
+    };
     /// waybar, opaque, with a 60px exclusive zone.
-    const BAR: Rect = Rect { x: 0, y: 0, w: 1600, h: 60 };
+    const BAR: Rect = Rect {
+        x: 0,
+        y: 0,
+        w: 1600,
+        h: 60,
+    };
 
     fn approx(a: f64, b: f64) {
         assert!((a - b).abs() < 1e-9, "{a} != {b}");
@@ -187,7 +202,10 @@ mod tests {
         let a = Rect::new(15, 75, 779, 909);
         let b = Rect::new(806, 75, 779, 909);
         let c = covered_fraction(OUT, &[BAR, a, b]);
-        assert!(c > 0.90 && c < 1.0, "expected a high but partial cover, got {c}");
+        assert!(
+            c > 0.90 && c < 1.0,
+            "expected a high but partial cover, got {c}"
+        );
     }
 
     /// A small floating window must NOT read as covered. This is the case
@@ -196,7 +214,10 @@ mod tests {
     fn small_floating_window_is_not_cover() {
         let float = Rect::new(480, 320, 640, 360);
         let c = covered_fraction(OUT, &[BAR, float]);
-        assert!(c < 0.30, "a 640x360 float should not hide the wallpaper, got {c}");
+        assert!(
+            c < 0.30,
+            "a 640x360 float should not hide the wallpaper, got {c}"
+        );
     }
 
     #[test]

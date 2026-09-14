@@ -99,11 +99,7 @@ impl MpvIpc {
     }
 }
 
-impl Target for MpvIpc {
-    fn describe(&self) -> String {
-        format!("mpv at {}", self.path.display())
-    }
-
+impl MpvIpc {
     fn is_paused(&mut self) -> io::Result<bool> {
         Ok(self
             .roundtrip(json!(["get_property", "pause"]))?
@@ -111,8 +107,22 @@ impl Target for MpvIpc {
             .unwrap_or(false))
     }
 
-    fn set_paused(&mut self, paused: bool) -> io::Result<()> {
+    pub(crate) fn set_paused(&mut self, paused: bool) -> io::Result<()> {
         self.roundtrip(json!(["set_property", "pause", paused]))?;
         Ok(())
+    }
+}
+
+impl Target for MpvIpc {
+    fn describe(&self) -> String {
+        format!("mpv at {}", self.path.display())
+    }
+
+    fn sync(&mut self, paused: bool) -> io::Result<bool> {
+        if self.is_paused()? == paused {
+            return Ok(false);
+        }
+        self.set_paused(paused)?;
+        Ok(true)
     }
 }

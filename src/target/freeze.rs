@@ -62,26 +62,79 @@ impl<T: Target> Target for Freeze<T> {
         format!("{} (+freeze {:?})", self.inner.describe(), self.pids)
     }
 
-    fn is_paused(&mut self) -> io::Result<bool> {
-        // Check the process state first: a stopped process cannot answer IPC,
-        // so asking it would block until the socket timeout on every single
-        // heartbeat.
-        if self.any_stopped() {
-            return Ok(true);
+    fn sync(&mut self, paused: bool) -> io::Result<bool> {
+        let stopped = self.any_stopped();
+        if paused {
+            if stopped {
+                // Already fully frozen. Do not touch the player: a stopped
+                // process cannot answer IPC, so asking would simply block
+                // until the socket timeout on every heartbeat.
+                return Ok(false);
+            }
+            // Pause first so mpv reaches a consistent state, then stop it.
+            // Reached both from "playing" and from the half state where the
+            // player is paused but the process is still running and burning
+            // CPU redrawing the same frame.
+            let _ = self.inner.sync(true);
+            self.signal_all(libc::SIGSTOP);
+            Ok(true)
+        } else {
+            // Wake it before talking to it, or the IPC call hangs.
+            if stopped {
+                self.signal_all(libc::SIGCONT);
+            }
+            let unpaused = self.inner.sync(false)?;
+            Ok(stopped || unpaused)
         }
-        self.inner.is_paused()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct MockPlayer {
+        paused: bool,
     }
 
-    fn set_paused(&mut self, paused: bool) -> io::Result<()> {
-        if paused {
-            // Pause first so mpv reaches a consistent state, then stop it.
-            let r = self.inner.set_paused(true);
-            self.signal_all(libc::SIGSTOP);
-            r
-        } else {
-            // Wake it before talking to it, or the IPC call will hang.
-            self.signal_all(libc::SIGCONT);
-            self.inner.set_paused(false)
+    impl Target for MockPlayer {
+        fn describe(&self) -> String {
+            "mock".into()
         }
+        fn sync(&mut self, paused: bool) -> io::Result<bool> {
+            let changed = self.paused != paused;
+            self.paused = paused;
+            Ok(changed)
+        }
+    }
+
+    /// Regression: the player being paused must NOT be mistaken for the
+    /// whole target being paused. With an is_paused()/set_paused() pair this
+    /// looked like "already correct", so the SIGSTOP half was never applied
+    /// and the wallpaper sat burning CPU redrawing a frozen frame.
+    ///
+    /// An empty pid list keeps the signalling inert, so this exercises the
+    /// decision rather than the kill(2).
+    #[test]
+    fn paused_player_that_is_not_stopped_still_needs_freezing() {
+        let mut t = Freeze::new(MockPlayer { paused: true }, vec![]);
+        assert!(
+            t.sync(true).unwrap(),
+            "process is not stopped yet, so there is still work to do"
+        );
+    }
+
+    /// The other direction of the same hole: a paused player with a running
+    /// process must still be unpaused when we want it playing.
+    #[test]
+    fn paused_player_is_resumed_even_when_not_stopped() {
+        let mut t = Freeze::new(MockPlayer { paused: true }, vec![]);
+        assert!(t.sync(false).unwrap());
+    }
+
+    #[test]
+    fn resuming_an_already_playing_target_is_a_no_op() {
+        let mut t = Freeze::new(MockPlayer { paused: false }, vec![]);
+        assert!(!t.sync(false).unwrap());
     }
 }
