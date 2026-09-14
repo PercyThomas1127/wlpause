@@ -1,0 +1,20 @@
+[package]
+name = "wlpause"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Pause video wallpapers while they are covered. Geometric occlusion detection for Wayland compositors."
+repository = "https://github.com/PercyThomas1127/wlpause"
+license = "MIT"
+readme = "README.md"
+keywords = ["wayland", "wallpaper", "hyprland", "mpvpaper", "power"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+serde_json = "1"
+libc = "0.2"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
