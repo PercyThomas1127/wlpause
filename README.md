@@ -55,6 +55,8 @@ crosses a threshold.
   keeps playing while *any* output still shows wallpaper.
 - **`--freeze`** stops the process outright, which is the difference between
   10% and 0% (see below).
+- **`--reclaim`** additionally swaps out the frozen wallpaper's memory, so
+  while hidden it costs neither CPU nor (most of) its RAM.
 - **Never caches the player's state.** If something else pauses the wallpaper,
   the next reconcile notices and corrects it.
 
@@ -105,6 +107,22 @@ exec-once = mpvpaper -f -o 'no-audio loop-file=inf input-ipc-server=/tmp/mpvsock
 exec-once = wlpause --freeze
 ```
 
+### `--reclaim`
+
+A frozen process still holds all its memory. With `--reclaim`, wlpause writes
+the wallpaper cgroup's `memory.current` into its `memory.reclaim` right after
+freezing it, and the kernel pushes it out to swap (zswap first, if enabled).
+Measured with a 2560x1600 15fps H.264 mpvpaper: anonymous memory 96MB → 0 while
+frozen; on resume mpv answered IPC in 12ms and only 62MB faulted back in. GPU
+buffers are pinned and stay resident. Needs swap, cgroup v2, and the wallpaper
+in a cgroup **of its own** — otherwise the reclaim would hit the compositor
+too, so wlpause refuses and logs why:
+
+```
+exec-once = systemd-run --user --scope --collect mpvpaper -f -o '...' '*' ~/video.mp4
+exec-once = wlpause --freeze --reclaim
+```
+
 ### Options
 
 ```
@@ -113,6 +131,7 @@ exec-once = wlpause --freeze
 -n, --namespace <NAME>    wallpaper layer namespace [default: mpvpaper]
     --alpha-min <0..1>    ignore layers more transparent than this [default: 1.0]
     --freeze              also SIGSTOP the wallpaper while hidden
+    --reclaim             with --freeze, also swap out its memory while frozen
     --heartbeat <SECS>    re-check even without events [default: 10]
     --debounce <MS>       settle time after an event burst [default: 250]
     --once                report one decision and exit

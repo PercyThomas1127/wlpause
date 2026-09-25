@@ -112,6 +112,11 @@ OPTIONS:
                               callbacks; freezing removes that too. Measured
                               fully covered: 40% of a core with no pauser,
                               10% with --no-freeze, 0% with --freeze.
+        --reclaim             With --freeze, also push the frozen wallpaper's
+                              memory out to swap via its cgroup's
+                              memory.reclaim. The wallpaper must run in a
+                              cgroup of its own, e.g. under
+                              `systemd-run --user --scope`.
         --no-resume-on-exit   Leave the wallpaper paused when wlpause exits.
                               By default it is resumed, so killing wlpause
                               never leaves a frozen wallpaper behind.
@@ -135,6 +140,7 @@ struct Opts {
     once: bool,
     resume_on_exit: bool,
     freeze: bool,
+    reclaim: bool,
 }
 
 impl Default for Opts {
@@ -152,6 +158,7 @@ impl Default for Opts {
             once: false,
             resume_on_exit: true,
             freeze: false,
+            reclaim: false,
         }
     }
 }
@@ -206,6 +213,7 @@ fn parse_args() -> Result<Option<Opts>, String> {
                 )
             }
             "--freeze" => o.freeze = true,
+            "--reclaim" => o.reclaim = true,
             "--no-resume-on-exit" => o.resume_on_exit = false,
             "--once" => {
                 o.once = true;
@@ -221,6 +229,9 @@ fn parse_args() -> Result<Option<Opts>, String> {
     }
     if !(0.0..=1.0).contains(&o.alpha_min) {
         return Err("--alpha-min must be between 0 and 1".into());
+    }
+    if o.reclaim && !o.freeze {
+        return Err("--reclaim needs --freeze: a running process just faults it all back".into());
     }
     if o.heartbeat.is_zero() {
         return Err("--heartbeat must be greater than zero".into());
@@ -368,7 +379,7 @@ fn run() -> Result<(), String> {
                 opts.namespace
             ));
         }
-        Box::new(Freeze::new(mpv, pids))
+        Box::new(Freeze::new(mpv, pids).with_reclaim(opts.reclaim))
     } else {
         Box::new(mpv)
     };
